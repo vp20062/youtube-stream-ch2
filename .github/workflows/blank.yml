@@ -2,8 +2,6 @@ name: 5-Hour YouTube Live Stream
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 */5 * * *' # Jarurat ho toh auto-restart ke liye un-comment karein
 
 jobs:
   stream:
@@ -23,32 +21,28 @@ jobs:
             echo "::error::image.jpg root directory me nahi mili!"
             exit 1
           fi
-          if [ ! -f "audio.mp3" ]; then
-            echo "::error::audio.mp3 root directory me nahi mili!"
+          if [ ! -f "kohli.m4a" ]; then
+            echo "::error::kohli.m4a root directory me nahi mili!"
             exit 1
           fi
+          echo "Dono files (image.jpg aur kohli.m4a) maujood hain."
 
       - name: Start 5-Hour Stream Pipeline
         env:
           RAW_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
         run: |
-          # Stream key clean karna (newlines/spaces hatana)
           STREAM_KEY=$(echo -n "$RAW_KEY" | tr -d '\r\n[:space:]"')
 
           if [ -z "$STREAM_KEY" ]; then
-            echo "::error::STREAM_KEY empty h! Secrets check karein."
+            echo "::error::STREAM_KEY empty h! Secrets verify karein."
             exit 1
           fi
 
-          echo "Starting 5-Hour Fixed Stream Pipeline for Channel 1..."
+          echo "Starting 5-Hour Stream Pipeline with kohli.m4a..."
 
-          # FFmpeg Pipeline:
-          # -loop 1 hamesha -i image.jpg se pehle hona zaroori hai
-          # -stream_loop -1 audio ko continuous loop karega
-          # -t 05:00:00 stream ko exactly 5 ghante chalayega
           ffmpeg -re \
             -loop 1 -framerate 30 -i image.jpg \
-            -stream_loop -1 -i audio.mp3 \
+            -stream_loop -1 -i kohli.m4a \
             -t 05:00:00 \
             -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
             -pix_fmt yuv420p -g 60 \
