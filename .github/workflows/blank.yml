@@ -7,25 +7,26 @@ jobs:
   stream:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repository with LFS
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Verify Media Files
+      - name: Inspect Files & Sizes
         run: |
-          if [ ! -f "image.jpg" ]; then
-            echo "::error::image.jpg root directory me nahi mili!"
-            exit 1
-          fi
-          if [ ! -f "kohli.m4a" ]; then
-            echo "::error::kohli.m4a root directory me nahi mili!"
-            exit 1
-          fi
-          echo "Dono files exist karti hain."
+          echo "=== File Details ==="
+          ls -lh image.jpg kohli.m4a
+
+          echo "=== Checking Image with ffprobe ==="
+          ffprobe -v error -show_entries stream=width,height,codec_name image.jpg || echo "Image reading error!"
+
+          echo "=== Checking Audio with ffprobe ==="
+          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name kohli.m4a || echo "Audio reading error!"
 
       - name: Start 5-Hour Stream Pipeline
         env:
@@ -36,20 +37,19 @@ jobs:
           STREAM_KEY=$(echo -n "$INPUT_KEY" | tr -d '\r\n[:space:]"')
 
           if [ -z "$STREAM_KEY" ]; then
-            echo "::error::Stream Key missing hai! Repo secrets check karein."
+            echo "::error::Stream Key missing hai!"
             exit 1
           fi
 
-          echo "Starting 5-Hour Stream Pipeline..."
+          echo "Starting stream pipeline..."
 
-          ffmpeg -re \
+          ffmpeg \
             -loop 1 -framerate 30 -i image.jpg \
-            -stream_loop -1 -i kohli.m4a \
+            -stream_loop -1 -re -i kohli.m4a \
             -t 05:00:00 \
-            -c:v libx264 -preset veryfast -tune stillimage \
-            -b:v 2500k -maxrate 2500k -bufsize 5000k \
-            -pix_fmt yuv420p -g 60 -keyint_min 60 -sc_threshold 0 \
-            -c:a aac -b:a 128k -ar 44100 -af "aresample=async=1" \
-            -shortest \
+            -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
+            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+            -g 60 -keyint_min 60 \
+            -c:a aac -b:a 128k -ar 44100 \
             -flvflags no_duration_filesize \
             -f flv "rtmp://a.rtmp.youtube.com/live2/$STREAM_KEY"
