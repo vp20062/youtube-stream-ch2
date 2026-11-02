@@ -1,36 +1,106 @@
-# This is a basic workflow to help you get started with Actions
+name: Continuous 24/7 Live Stream
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+  schedule:
+    # Fail-safe backup trigger (har 6 ghante me agar loop ruk jaye)
+    - cron: '0 */6 * * *'
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  run-stream:
     runs-on: ubuntu-latest
+    timeout-minutes: 340
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        channel:
+          - name: "Channel 1"
+            image_file: "image.jpg"
+            audio_file: "kohli.m4a" # Updated audio file name
+            stream_key_secret: "STREAM_KEY_2"
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Ensure FFmpeg is Installed
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          if ! command -v ffmpeg &> /dev/null; then
+            echo "FFmpeg not found. Installing..."
+            sudo apt-get update -qq
+            sudo apt-get install -y ffmpeg
+          else
+            echo "FFmpeg is already installed: $(ffmpeg -version | head -n 1)"
+          fi
+
+      - name: Check Input Files
+        run: |
+          echo "Verifying input files exist..."
+          if [ ! -f "${{ matrix.channel.image_file }}" ]; then
+            echo "::error::Image file '${{ matrix.channel.image_file }}' not found in repo root!"
+            exit 1
+          fi
+
+          if [ ! -f "${{ matrix.channel.audio_file }}" ]; then
+            echo "::error::Audio file '${{ matrix.channel.audio_file }}' not found in repo root!"
+            exit 1
+          fi
+
+          ls -lh "${{ matrix.channel.image_file }}" "${{ matrix.channel.audio_file }}"
+
+      - name: Execute Stream for ${{ matrix.channel.name }}
+        env:
+          RAW_KEY: ${{ secrets[matrix.channel.stream_key_secret] || secrets.STREAM_KEY_2 }}
+        run: |
+          STREAM_KEY=$(echo -n "$RAW_KEY" | tr -d '\r\n[:space:]"')
+
+          if [ -z "$STREAM_KEY" ]; then
+            echo "::error::Stream key secret for '${{ matrix.channel.name }}' is missing or empty!"
+            exit 1
+          fi
+
+          echo "Starting 5-Hour Fixed Stream Pipeline for ${{ matrix.channel.name }}..."
+
+          # -t 18000 = Exactly 5 Hours
+          ffmpeg -hide_banner -loglevel warning \
+            -loop 1 -framerate 30 -re -i "${{ matrix.channel.image_file }}" \
+            -stream_loop -1 -re -i "${{ matrix.channel.audio_file }}" \
+            -map 0:v:0 -map 1:a:0 \
+            -t 18000 \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
+            -r 30 -fps_mode cfr \
+            -c:v libx264 -preset ultrafast -tune stillimage \
+            -b:v 2500k -maxrate 2500k -bufsize 5000k -pix_fmt yuv420p \
+            -g 60 -keyint_min 60 -sc_threshold 0 \
+            -c:a aac -b:a 160k -ar 44100 -ac 2 \
+            -flvflags no_duration_filesize \
+            -f flv "rtmp://a.rtmp.youtube.com/live2/$STREAM_KEY"
+
+      - name: Wait for YouTube Connection Release
+        run: sleep 15
+
+  trigger-next-loop:
+    needs: run-stream
+    if: always() && !cancelled() && needs.run-stream.result == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Trigger Next Run
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_STREAM_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::AUTO_STREAM_PAT secret is missing!"
+            exit 1
+          fi
+
+          echo "Stream completed. Triggering next cycle..."
+          sleep 10
+          gh workflow run "${{ github.workflow }}" --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"
