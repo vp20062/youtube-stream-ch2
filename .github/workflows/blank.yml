@@ -25,20 +25,25 @@ jobs:
             echo "::error::kohli.m4a root directory me nahi mili!"
             exit 1
           fi
-          echo "Dono files (image.jpg aur kohli.m4a) maujood hain."
+          echo "Files image.jpg aur kohli.m4a verified."
 
       - name: Start 5-Hour Stream Pipeline
         env:
-          RAW_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          # Dono me se jo bhi set hoga, utha lega
+          RAW_KEY_1: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          RAW_KEY_2: ${{ secrets.STREAM_KEY }}
         run: |
-          STREAM_KEY=$(echo -n "$RAW_KEY" | tr -d '\r\n[:space:]"')
+          # Pehle YOUTUBE_STREAM_KEY check karega, agar empty h toh STREAM_KEY
+          INPUT_KEY="${RAW_KEY_1:-$RAW_KEY_2}"
+
+          STREAM_KEY=$(echo -n "$INPUT_KEY" | tr -d '\r\n[:space:]"')
 
           if [ -z "$STREAM_KEY" ]; then
-            echo "::error::STREAM_KEY empty h! Secrets verify karein."
+            echo "::error::Stream Key nahi mili! Repo Settings -> Secrets and variables -> Actions me jaakar 'YOUTUBE_STREAM_KEY' naam ka secret add karein."
             exit 1
           fi
 
-          echo "Starting 5-Hour Stream Pipeline with kohli.m4a..."
+          echo "Stream Key detect ho gayi h. Starting stream..."
 
           ffmpeg -re \
             -loop 1 -framerate 30 -i image.jpg \
