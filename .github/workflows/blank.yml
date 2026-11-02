@@ -25,32 +25,31 @@ jobs:
             echo "::error::kohli.m4a root directory me nahi mili!"
             exit 1
           fi
-          echo "Files image.jpg aur kohli.m4a verified."
+          echo "Dono files exist karti hain."
 
       - name: Start 5-Hour Stream Pipeline
         env:
-          # Dono me se jo bhi set hoga, utha lega
           RAW_KEY_1: ${{ secrets.YOUTUBE_STREAM_KEY }}
           RAW_KEY_2: ${{ secrets.STREAM_KEY }}
         run: |
-          # Pehle YOUTUBE_STREAM_KEY check karega, agar empty h toh STREAM_KEY
           INPUT_KEY="${RAW_KEY_1:-$RAW_KEY_2}"
-
           STREAM_KEY=$(echo -n "$INPUT_KEY" | tr -d '\r\n[:space:]"')
 
           if [ -z "$STREAM_KEY" ]; then
-            echo "::error::Stream Key nahi mili! Repo Settings -> Secrets and variables -> Actions me jaakar 'YOUTUBE_STREAM_KEY' naam ka secret add karein."
+            echo "::error::Stream Key missing hai! Repo secrets check karein."
             exit 1
           fi
 
-          echo "Stream Key detect ho gayi h. Starting stream..."
+          echo "Starting 5-Hour Stream Pipeline..."
 
           ffmpeg -re \
             -loop 1 -framerate 30 -i image.jpg \
             -stream_loop -1 -i kohli.m4a \
             -t 05:00:00 \
-            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
-            -pix_fmt yuv420p -g 60 \
-            -c:a aac -b:a 128k -ar 44100 \
+            -c:v libx264 -preset veryfast -tune stillimage \
+            -b:v 2500k -maxrate 2500k -bufsize 5000k \
+            -pix_fmt yuv420p -g 60 -keyint_min 60 -sc_threshold 0 \
+            -c:a aac -b:a 128k -ar 44100 -af "aresample=async=1" \
             -shortest \
+            -flvflags no_duration_filesize \
             -f flv "rtmp://a.rtmp.youtube.com/live2/$STREAM_KEY"
