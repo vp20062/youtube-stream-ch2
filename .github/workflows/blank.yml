@@ -19,28 +19,24 @@ jobs:
         env:
           STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY || secrets.STREAM_KEY }}
         run: |
-          # Stream key clean karna
           KEY=$(echo -n "$STREAM_KEY" | tr -d '\r\n[:space:]"')
-          
           if [ -z "$KEY" ]; then
-            echo "::error::Stream Key missing hai! Repository Settings -> Secrets and variables -> Actions me key check karein."
+            echo "::error::Stream Key missing hai!"
             exit 1
           fi
 
-          echo "Pre-processing background and audio..."
-          ffmpeg -y -i image.jpg -vf "scale=1920:1080" fixed_bg.jpg
+          echo "Preparing clean audio..."
           ffmpeg -y -i kohli.m4a -c:a pcm_s16le -ar 44100 -ac 2 audio_temp.wav
 
-          echo "Starting Stream to YouTube RTMPS..."
-
+          echo "Starting Stream to YouTube (Looping Video + Audio)..."
           ffmpeg -re \
-            -thread_queue_size 1024 \
-            -loop 1 -framerate 30 -i fixed_bg.jpg \
-            -thread_queue_size 1024 \
+            -stream_loop -1 -i image.jpg \
             -stream_loop -1 -i audio_temp.wav \
             -t 05:00:00 \
-            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k -pix_fmt yuv420p \
+            -map 0:v:0 -map 1:a:0 \
+            -vf "scale=1920:1080,format=yuv420p" \
+            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
             -flvflags no_duration_filesize \
-            -f flv "rtmps://a.rtmp.youtube.com/live2/$KEY"
+            -f flv "rtmp://a.rtmp.youtube.com/live2/$KEY"
