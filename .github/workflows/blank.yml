@@ -19,29 +19,28 @@ jobs:
         env:
           STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY || secrets.STREAM_KEY }}
         run: |
+          # Stream key clean karna
           KEY=$(echo -n "$STREAM_KEY" | tr -d '\r\n[:space:]"')
+          
           if [ -z "$KEY" ]; then
-            echo "::error::Stream Key missing hai!"
+            echo "::error::Stream Key missing hai! Repository Settings -> Secrets and variables -> Actions me key check karein."
             exit 1
           fi
 
-          # 1. Image ko pehle se exact 1920x1080 fix bana lo (SIGFPE filter crash se bachne ke liye)
-          echo "Pre-processing background image..."
-          ffmpeg -y -i image.jpg -vf "scale=1920:1080,format=yuv420p" fixed_bg.jpg
-
-          # 2. Audio file ko clean standard WAV me convert karo
-          echo "Preparing audio track..."
+          echo "Pre-processing background and audio..."
+          ffmpeg -y -i image.jpg -vf "scale=1920:1080" fixed_bg.jpg
           ffmpeg -y -i kohli.m4a -c:a pcm_s16le -ar 44100 -ac 2 audio_temp.wav
 
-          echo "Starting Stream to YouTube..."
+          echo "Starting Stream to YouTube RTMPS..."
 
-          # 3. Stream Pipeline (Bina kisi dynamic aspect-ratio calculation ke)
           ffmpeg -re \
+            -thread_queue_size 1024 \
             -loop 1 -framerate 30 -i fixed_bg.jpg \
+            -thread_queue_size 1024 \
             -stream_loop -1 -i audio_temp.wav \
             -t 05:00:00 \
             -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k -pix_fmt yuv420p \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
             -flvflags no_duration_filesize \
-            -f flv "rtmp://a.rtmp.youtube.com/live2/$KEY"
+            -f flv "rtmps://a.rtmp.youtube.com/live2/$KEY"
