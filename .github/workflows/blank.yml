@@ -1,34 +1,4 @@
-name: 5-Hour YouTube Live Stream
-
-on:
-  workflow_dispatch:
-
-jobs:
-  stream:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository with LFS
-        uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Inspect Files & Sizes
-        run: |
-          echo "=== File Details ==="
-          ls -lh image.m4a kohli.m4a
-
-          echo "=== Checking Image with ffprobe ==="
-          ffprobe -v error -show_entries stream=width,height,codec_name image.m4a || echo "Image reading error!"
-
-          echo "=== Checking Audio with ffprobe ==="
-          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name kohli.m4a || echo "Audio reading error!"
-
-      - name: Start 5-Hour Stream Pipeline
+- name: Start 5-Hour Stream Pipeline
         env:
           RAW_KEY_1: ${{ secrets.YOUTUBE_STREAM_KEY }}
           RAW_KEY_2: ${{ secrets.STREAM_KEY }}
@@ -43,11 +13,12 @@ jobs:
 
           echo "Starting stream pipeline..."
 
-          ffmpeg \
-            -loop 1 -framerate 30 -i image.m4a \
-            -stream_loop -1 -re -i kohli.m4a \
+          ffmpeg -re \
+            -loop 1 -framerate 30 -i image.jpg \
+            -stream_loop -1 -i kohli.m4a \
             -t 05:00:00 \
-            -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
+            -map 0:v:0 -map 1:a:0 \
+            -vf "scale=1920:1080,format=yuv420p" \
             -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
