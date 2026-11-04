@@ -19,26 +19,28 @@ jobs:
         env:
           STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY || secrets.STREAM_KEY }}
         run: |
-          # 1. Check Stream Key
           KEY=$(echo -n "$STREAM_KEY" | tr -d '\r\n[:space:]"')
           if [ -z "$KEY" ]; then
-            echo "ERROR: Stream key secret empty hai! GitHub Settings -> Secrets me YOUTUBE_STREAM_KEY check karein."
+            echo "::error::Stream Key missing hai!"
             exit 1
           fi
 
-          # 2. Convert M4A to clean PCM Audio first to prevent SIGFPE (Exit Code 8)
+          # 1. Image ko pehle se exact 1920x1080 fix bana lo (SIGFPE filter crash se bachne ke liye)
+          echo "Pre-processing background image..."
+          ffmpeg -y -i image.jpg -vf "scale=1920:1080,format=yuv420p" fixed_bg.jpg
+
+          # 2. Audio file ko clean standard WAV me convert karo
           echo "Preparing audio track..."
           ffmpeg -y -i kohli.m4a -c:a pcm_s16le -ar 44100 -ac 2 audio_temp.wav
 
-          echo "Starting YouTube Live Stream..."
+          echo "Starting Stream to YouTube..."
 
-          # 3. Stream to YouTube
+          # 3. Stream Pipeline (Bina kisi dynamic aspect-ratio calculation ke)
           ffmpeg -re \
-            -loop 1 -framerate 30 -i image.jpg \
+            -loop 1 -framerate 30 -i fixed_bg.jpg \
             -stream_loop -1 -i audio_temp.wav \
             -t 05:00:00 \
-            -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
-            -c:v libx264 -preset veryfast -b:v 3000k -maxrate 3000k -bufsize 6000k \
+            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k -pix_fmt yuv420p \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
             -flvflags no_duration_filesize \
