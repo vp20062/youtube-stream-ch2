@@ -19,8 +19,8 @@ jobs:
         run: |
           echo "=== Checking Directory Content ==="
           ls -lh image.jpg kohli.m4a
-          ffprobe -v error -show_entries format=duration,size image.jpg || echo "Image probe error"
-          ffprobe -v error -show_entries format=duration,size kohli.m4a || echo "Audio probe error"
+          ffprobe -i image.jpg
+          ffprobe -i kohli.m4a
 
       - name: Start 5-Hour Stream Pipeline
         env:
@@ -37,14 +37,14 @@ jobs:
 
           echo "Starting stream pipeline..."
 
-          ffmpeg -re \
-            -loop 1 -framerate 30 -i image.jpg \
-            -stream_loop -1 -i kohli.m4a \
+          ffmpeg \
+            -loop 1 -framerate 30 -re -i image.jpg \
+            -stream_loop -1 -re -i kohli.m4a \
             -t 05:00:00 \
-            -map 0:v:0 -map 1:a:0 \
-            -vf "scale=1920:1080,format=yuv420p" \
-            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+            -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
+            -c:v libx264 -preset veryfast -b:v 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
+            -shortest \
             -flvflags no_duration_filesize \
             -f flv "rtmp://a.rtmp.youtube.com/live2/$STREAM_KEY"
