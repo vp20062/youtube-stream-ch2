@@ -20,10 +20,10 @@ jobs:
       - name: Inspect Files & Sizes
         run: |
           echo "=== File Details ==="
-          ls -lh image.jpg kohli.m4a
+          ls -lh image.m4a kohli.m4a
 
           echo "=== Checking Image with ffprobe ==="
-          ffprobe -v error -show_entries stream=width,height,codec_name image.jpg || echo "Image reading error!"
+          ffprobe -v error -show_entries stream=width,height,codec_name image.m4a || echo "Image reading error!"
 
           echo "=== Checking Audio with ffprobe ==="
           ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name kohli.m4a || echo "Audio reading error!"
@@ -44,7 +44,7 @@ jobs:
           echo "Starting stream pipeline..."
 
           ffmpeg \
-            -loop 1 -framerate 30 -i image.jpg \
+            -loop 1 -framerate 30 -i image.m4a \
             -stream_loop -1 -re -i kohli.m4a \
             -t 05:00:00 \
             -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p" \
