@@ -28,14 +28,14 @@ jobs:
           echo "Preparing clean audio..."
           ffmpeg -y -i kohli.m4a -c:a pcm_s16le -ar 44100 -ac 2 audio_temp.wav
 
-          echo "Starting Stream to YouTube (Looping Video + Audio)..."
+          echo "Starting Stream to YouTube (6000k Bitrate for 1080p)..."
           ffmpeg -re \
             -stream_loop -1 -i image.jpg \
             -stream_loop -1 -i audio_temp.wav \
             -t 05:00:00 \
             -map 0:v:0 -map 1:a:0 \
             -vf "scale=1920:1080,format=yuv420p" \
-            -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+            -c:v libx264 -preset veryfast -b:v 6000k -maxrate 6800k -bufsize 12000k \
             -g 60 -keyint_min 60 \
             -c:a aac -b:a 128k -ar 44100 \
             -flvflags no_duration_filesize \
