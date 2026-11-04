@@ -1,4 +1,28 @@
-- name: Start 5-Hour Stream Pipeline
+name: 5-Hour YouTube Live Stream
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Verify Files
+        run: |
+          echo "=== Checking Directory Content ==="
+          ls -lh image.jpg kohli.m4a
+          ffprobe -v error -show_entries format=duration,size image.jpg || echo "Image probe error"
+          ffprobe -v error -show_entries format=duration,size kohli.m4a || echo "Audio probe error"
+
+      - name: Start 5-Hour Stream Pipeline
         env:
           RAW_KEY_1: ${{ secrets.YOUTUBE_STREAM_KEY }}
           RAW_KEY_2: ${{ secrets.STREAM_KEY }}
